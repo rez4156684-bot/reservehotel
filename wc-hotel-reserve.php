@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce Hotel Reservation System - Professional Edition
  * Description: سیستم پیشرفته رزرو هتل برای محصولات ساده ووکامرس
- * Version: 9.0.0
+ * Version: 10.0.0
  * Author: بهادر
  * Text Domain: wc-hotel-reserve
  */
@@ -37,6 +37,10 @@ class WC_Hotel_Reserve {
         add_action('woocommerce_before_add_to_cart_button', [$this, 'display_hotel_rooms']);
         add_action('wp_footer', [$this, 'frontend_scripts']);
 
+        // مخفی کردن دکمه افزودن به سبد و quantity
+        add_filter('woocommerce_is_purchasable', [$this, 'hide_add_to_cart_button'], 10, 2);
+        add_action('woocommerce_single_product_summary', [$this, 'hide_quantity_field'], 1);
+
         // AJAX
         add_action('wp_ajax_hotel_check_room_availability', [$this, 'ajax_check_availability']);
         add_action('wp_ajax_nopriv_hotel_check_room_availability', [$this, 'ajax_check_availability']);
@@ -47,6 +51,20 @@ class WC_Hotel_Reserve {
         add_action('woocommerce_before_calculate_totals', [$this, 'update_cart_item_price']);
         add_filter('woocommerce_get_item_data', [$this, 'display_cart_item_data'], 10, 2);
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'save_order_item_meta'], 10, 4);
+    }
+
+    public function hide_add_to_cart_button($purchasable, $product) {
+        if (get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes') {
+            return false;
+        }
+        return $purchasable;
+    }
+
+    public function hide_quantity_field() {
+        global $product;
+        if ($product && get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes') {
+            echo '<style>.quantity { display: none !important; }</style>';
+        }
     }
 
     public function add_product_data_tab($tabs) {
@@ -60,31 +78,43 @@ class WC_Hotel_Reserve {
 
     public function add_product_data_panel() {
         global $post;
+        $enabled = get_post_meta($post->ID, '_enable_hotel_reservation', true) === 'yes';
         $rooms = get_post_meta($post->ID, '_hotel_rooms', true);
         $rooms = is_array($rooms) ? $rooms : [];
         ?>
         <div id="hotel_rooms_data" class="panel woocommerce_options_panel">
-            <div class="options_group" style="padding:15px;">
+            <div class="options_group" style="padding:20px;">
 
-                <div style="background:#e3f2fd;padding:15px;border-radius:8px;margin-bottom:20px;border-right:4px solid #2196f3;">
-                    <h4 style="margin:0 0 10px 0;">📖 راهنما</h4>
-                    <p style="margin:0;color:#666;">این محصول یک <strong>هتل</strong> است. در این بخش اتاق‌های مختلف هتل را تعریف کنید. هر اتاق دارای نام، ظرفیت، قیمت پایه و بازه‌های قیمت‌گذاری مخصوص خودش است.</p>
+                <!-- فعال/غیرفعال کردن -->
+                <div style="background:#e3f2fd;padding:20px;border-radius:10px;margin-bottom:25px;border-right:5px solid #2196f3;">
+                    <label style="display:flex;align-items:center;cursor:pointer;">
+                        <input type="checkbox" name="_enable_hotel_reservation" id="enable_hotel_reservation" value="yes" <?php checked($enabled, true); ?> style="width:20px;height:20px;margin-left:10px;">
+                        <span style="font-size:16px;font-weight:bold;">✓ فعال کردن سیستم رزرو هتل برای این محصول</span>
+                    </label>
+                    <p style="margin:10px 0 0 30px;color:#666;font-size:13px;">با فعال کردن این گزینه، دکمه "افزودن به سبد خرید" معمولی حذف می‌شود و رزرو از طریق انتخاب اتاق و تاریخ انجام می‌شود.</p>
                 </div>
 
-                <button type="button" class="button button-primary button-large" id="add-new-room-btn">
-                    ➕ افزودن اتاق جدید
-                </button>
+                <div id="hotel-rooms-panel" style="<?php echo $enabled ? '' : 'display:none;'; ?>">
+                    <div style="background:#f0f8ff;padding:15px;border-radius:8px;margin-bottom:20px;border-right:4px solid #2196f3;">
+                        <h4 style="margin:0 0 10px 0;">📖 راهنما</h4>
+                        <p style="margin:0;color:#666;">این محصول یک <strong>هتل</strong> است. در این بخش اتاق‌های مختلف هتل را تعریف کنید. هر اتاق دارای نام، ظرفیت، قیمت پایه و بازه‌های قیمت‌گذاری مخصوص خودش است.</p>
+                    </div>
 
-                <div id="hotel-rooms-container" style="margin-top:20px;">
-                    <?php if (!empty($rooms)): ?>
-                        <?php foreach ($rooms as $index => $room): ?>
-                            <?php $this->render_room_admin($index, $room); ?>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <div id="no-rooms-msg" style="background:#fff3cd;padding:20px;border-radius:8px;text-align:center;">
-                            <p style="margin:0;">⚠️ هنوز اتاقی اضافه نشده است. روی دکمه بالا کلیک کنید.</p>
-                        </div>
-                    <?php endif; ?>
+                    <button type="button" class="button button-primary button-large" id="add-new-room-btn" style="margin-bottom:20px;">
+                        ➕ افزودن اتاق جدید
+                    </button>
+
+                    <div id="hotel-rooms-container">
+                        <?php if (!empty($rooms)): ?>
+                            <?php foreach ($rooms as $index => $room): ?>
+                                <?php $this->render_room_admin($index, $room); ?>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div id="no-rooms-msg" style="background:#fff3cd;padding:20px;border-radius:8px;text-align:center;">
+                                <p style="margin:0;">⚠️ هنوز اتاقی اضافه نشده است. روی دکمه بالا کلیک کنید.</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
             </div>
@@ -93,87 +123,107 @@ class WC_Hotel_Reserve {
         <style>
         .room-admin-item {
             background: #fff;
-            border: 2px solid #ddd;
-            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
             padding: 0;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
             overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         .room-admin-header {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-            padding: 15px 20px;
+            padding: 18px 25px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .room-admin-header h3 { margin: 0; font-size: 16px; }
-        .room-admin-body { padding: 20px; }
+        .room-admin-header h3 { margin: 0; font-size: 17px; font-weight: 600; }
+        .room-admin-body { padding: 25px; }
         .room-admin-fields {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 15px;
+            gap: 20px;
+            margin-bottom: 20px;
         }
         .room-admin-field label {
             display: block;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             color: #333;
+            font-size: 14px;
         }
         .room-admin-field input,
         .room-admin-field textarea {
             width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border 0.3s;
         }
-        .room-admin-field textarea { min-height: 60px; resize: vertical; }
+        .room-admin-field input:focus,
+        .room-admin-field textarea:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+        .room-admin-field textarea { min-height: 70px; resize: vertical; }
         .date-ranges-section {
             background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        .date-ranges-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            color: #333;
         }
         .date-range-item {
             background: white;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 12px;
-            margin-bottom: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
             display: grid;
-            grid-template-columns: 2fr 2fr 1.5fr auto auto;
-            gap: 10px;
+            grid-template-columns: 1.5fr 1.5fr 1.2fr auto auto auto auto;
+            gap: 12px;
             align-items: center;
         }
         .date-range-item input {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 13px;
         }
         .btn-remove-room {
             background: #dc3545;
             color: white;
             border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
+            padding: 10px 18px;
+            border-radius: 6px;
             cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
         }
+        .btn-remove-room:hover { background: #c82333; }
         .btn-add-date-range {
             background: #28a745;
             color: white;
             border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
+            padding: 10px 18px;
+            border-radius: 6px;
             cursor: pointer;
-            margin-top: 10px;
+            font-weight: 600;
+            margin-top: 12px;
         }
         .btn-remove-date-range {
             background: #dc3545;
             color: white;
             border: none;
-            padding: 5px 10px;
-            border-radius: 3px;
+            padding: 6px 12px;
+            border-radius: 5px;
             cursor: pointer;
             font-size: 12px;
         }
@@ -181,10 +231,11 @@ class WC_Hotel_Reserve {
             background: #2196f3;
             color: white;
             border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
+            padding: 8px 14px;
+            border-radius: 5px;
             cursor: pointer;
             font-size: 12px;
+            white-space: nowrap;
         }
         </style>
 
@@ -192,14 +243,26 @@ class WC_Hotel_Reserve {
         jQuery(document).ready(function($) {
             var roomCounter = <?php echo count($rooms); ?>;
 
+            // نمایش/مخفی پنل اتاق‌ها
+            $('#enable_hotel_reservation').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#hotel-rooms-panel').slideDown();
+                } else {
+                    $('#hotel-rooms-panel').slideUp();
+                }
+            });
+
             // افزودن اتاق جدید
             $('#add-new-room-btn').on('click', function() {
                 $('#no-rooms-msg').remove();
                 var html = generateRoomHTML(roomCounter, {
                     name: '',
-                    capacity: 1,
+                    guest_capacity: 2,
                     base_price: '',
                     description: '',
+                    allow_extra_guest: false,
+                    max_extra_guests: 0,
+                    extra_guest_price: 0,
                     date_ranges: []
                 });
                 $('#hotel-rooms-container').append(html);
@@ -210,7 +273,7 @@ class WC_Hotel_Reserve {
                 var html = '<div class="room-admin-item" data-room-index="' + index + '">' +
                     '<div class="room-admin-header">' +
                         '<h3>🚪 اتاق #' + (index + 1) + '</h3>' +
-                        '<button type="button" class="btn-remove-room">🗑️ حذف</button>' +
+                        '<button type="button" class="btn-remove-room">🗑️ حذف اتاق</button>' +
                     '</div>' +
                     '<div class="room-admin-body">' +
                         '<div class="room-admin-fields">' +
@@ -219,8 +282,8 @@ class WC_Hotel_Reserve {
                                 '<input type="text" name="hotel_rooms[' + index + '][name]" value="' + (data.name || '') + '" placeholder="مثال: اتاق دو تخته VIP" required>' +
                             '</div>' +
                             '<div class="room-admin-field">' +
-                                '<label>ظرفیت (تعداد اتاق) *</label>' +
-                                '<input type="number" name="hotel_rooms[' + index + '][capacity]" value="' + (data.capacity || 1) + '" min="1" required>' +
+                                '<label>ظرفیت (تعداد نفر) *</label>' +
+                                '<input type="number" name="hotel_rooms[' + index + '][guest_capacity]" value="' + (data.guest_capacity || 2) + '" min="1" required>' +
                             '</div>' +
                             '<div class="room-admin-field">' +
                                 '<label>قیمت پایه (تومان/شب) *</label>' +
@@ -231,8 +294,24 @@ class WC_Hotel_Reserve {
                                 '<textarea name="hotel_rooms[' + index + '][description]" placeholder="امکانات، توضیحات...">' + (data.description || '') + '</textarea>' +
                             '</div>' +
                         '</div>' +
+                        '<div style="background:#fff3cd;padding:15px;border-radius:8px;margin-bottom:20px;">' +
+                            '<label style="display:flex;align-items:center;cursor:pointer;margin-bottom:10px;">' +
+                                '<input type="checkbox" class="allow-extra-guest" name="hotel_rooms[' + index + '][allow_extra_guest]" value="1" ' + (data.allow_extra_guest ? 'checked' : '') + ' style="width:18px;height:18px;margin-left:8px;">' +
+                                '<strong>امکان نفر اضافه</strong>' +
+                            '</label>' +
+                            '<div class="extra-guest-fields" style="display:' + (data.allow_extra_guest ? 'grid' : 'none') + ';grid-template-columns:1fr 1fr;gap:15px;margin-top:10px;">' +
+                                '<div>' +
+                                    '<label style="display:block;margin-bottom:5px;font-size:13px;">حداکثر نفر اضافه</label>' +
+                                    '<input type="number" name="hotel_rooms[' + index + '][max_extra_guests]" value="' + (data.max_extra_guests || 0) + '" min="0" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">' +
+                                '</div>' +
+                                '<div>' +
+                                    '<label style="display:block;margin-bottom:5px;font-size:13px;">قیمت هر نفر اضافه (تومان/شب)</label>' +
+                                    '<input type="number" name="hotel_rooms[' + index + '][extra_guest_price]" value="' + (data.extra_guest_price || 0) + '" step="1000" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
                         '<div class="date-ranges-section">' +
-                            '<h4 style="margin:0 0 10px 0;">📅 بازه‌های قیمت‌گذاری</h4>' +
+                            '<h4>📅 بازه‌های قیمت‌گذاری</h4>' +
                             '<p style="margin:0 0 10px 0;color:#666;font-size:13px;">می‌توانید برای بازه‌های زمانی مختلف (تعطیلات، آخر هفته) قیمت متفاوت تعیین کنید.</p>' +
                             '<button type="button" class="btn-add-date-range" data-room-index="' + index + '">➕ افزودن بازه قیمت</button>' +
                             '<div class="date-ranges-list" data-room-index="' + index + '"></div>' +
@@ -243,9 +322,14 @@ class WC_Hotel_Reserve {
                 return html;
             }
 
+            // نمایش فیلدهای نفر اضافه
+            $(document).on('change', '.allow-extra-guest', function() {
+                $(this).closest('div').find('.extra-guest-fields').slideToggle();
+            });
+
             // حذف اتاق
             $(document).on('click', '.btn-remove-room', function() {
-                if (confirm('آیا مطمئن هستید؟')) {
+                if (confirm('آیا مطمئن هستید که می‌خواهید این اتاق را حذف کنید؟')) {
                     $(this).closest('.room-admin-item').remove();
                     if ($('.room-admin-item').length === 0) {
                         $('#hotel-rooms-container').html('<div id="no-rooms-msg" style="background:#fff3cd;padding:20px;border-radius:8px;text-align:center;"><p style="margin:0;">⚠️ هنوز اتاقی اضافه نشده است.</p></div>');
@@ -257,16 +341,15 @@ class WC_Hotel_Reserve {
             $(document).on('click', '.btn-add-date-range', function() {
                 var roomIndex = $(this).data('room-index');
                 var container = $('.date-ranges-list[data-room-index="' + roomIndex + '"]');
-                var rangeIndex = container.find('.date-range-item').length;
 
                 var html = '<div class="date-range-item">' +
-                    '<input type="text" class="range-from" placeholder="از تاریخ: 1403/09/15" readonly>' +
-                    '<input type="text" class="range-to" placeholder="تا تاریخ: 1403/09/20" readonly>' +
+                    '<input type="text" class="range-from" placeholder="از: 1403/09/15" readonly>' +
+                    '<input type="text" class="range-to" placeholder="تا: 1403/09/20" readonly>' +
                     '<input type="number" class="range-price" placeholder="قیمت/شب" step="1000">' +
                     '<button type="button" class="btn-select-date" data-target="from">📅 از</button>' +
                     '<button type="button" class="btn-select-date" data-target="to">📅 تا</button>' +
-                    '<label style="white-space:nowrap;"><input type="checkbox" class="range-disabled"> غیرفعال</label>' +
-                    '<button type="button" class="btn-remove-date-range">حذف</button>' +
+                    '<label style="white-space:nowrap;font-size:12px;"><input type="checkbox" class="range-disabled"> غیرفعال</label>' +
+                    '<button type="button" class="btn-remove-date-range">✕</button>' +
                 '</div>';
 
                 container.append(html);
@@ -281,7 +364,7 @@ class WC_Hotel_Reserve {
             var currentDateField = null;
 
             $(document).on('click', '.btn-select-date', function() {
-                var target = $(this).data('target'); // 'from' or 'to'
+                var target = $(this).data('target');
                 var rangeItem = $(this).closest('.date-range-item');
 
                 if (target === 'from') {
@@ -290,12 +373,10 @@ class WC_Hotel_Reserve {
                     currentDateField = rangeItem.find('.range-to');
                 }
 
-                // باز کردن مودال تقویم
                 openAdminCalendar();
             });
 
             function openAdminCalendar() {
-                // نمایش مودال تقویم (در انتهای کد تعریف می‌شود)
                 $('#admin-calendar-modal').fadeIn();
                 renderAdminCalendar();
             }
@@ -303,7 +384,6 @@ class WC_Hotel_Reserve {
             // ذخیره بازه‌ها قبل از submit
             $('form#post').on('submit', function() {
                 $('.room-admin-item').each(function() {
-                    var roomIndex = $(this).data('room-index');
                     var ranges = [];
 
                     $(this).find('.date-range-item').each(function() {
@@ -326,7 +406,7 @@ class WC_Hotel_Reserve {
                 });
             });
 
-            // تقویم ادمین (در پایین تعریف می‌شود)
+            // تقویم ادمین
             window.adminCalendarSelectDate = function(dateStr) {
                 if (currentDateField) {
                     currentDateField.val(dateStr);
@@ -347,12 +427,10 @@ class WC_Hotel_Reserve {
                 var daysInMonth = getDaysInJalaliMonth(year, month);
                 var firstDay = getFirstDayOfJalaliMonth(year, month);
 
-                // روزهای خالی
                 for (var i = 0; i < firstDay; i++) {
                     html += '<div class="admin-cal-day empty"></div>';
                 }
 
-                // روزهای ماه
                 for (var day = 1; day <= daysInMonth; day++) {
                     var dateStr = year + '/' + pad(month) + '/' + pad(day);
                     html += '<div class="admin-cal-day" data-date="' + dateStr + '">' + day + '</div>';
@@ -390,11 +468,10 @@ class WC_Hotel_Reserve {
             function getDaysInJalaliMonth(year, month) {
                 if (month <= 6) return 31;
                 if (month <= 11) return 30;
-                return 29; // ساده‌سازی شده
+                return 29;
             }
 
             function getFirstDayOfJalaliMonth(year, month) {
-                // ساده‌سازی شده
                 return 0;
             }
 
@@ -414,7 +491,7 @@ class WC_Hotel_Reserve {
         <div class="room-admin-item" data-room-index="<?php echo $index; ?>">
             <div class="room-admin-header">
                 <h3>🚪 اتاق: <?php echo esc_html($room['name'] ?? 'اتاق #' . ($index + 1)); ?></h3>
-                <button type="button" class="btn-remove-room">🗑️ حذف</button>
+                <button type="button" class="btn-remove-room">🗑️ حذف اتاق</button>
             </div>
             <div class="room-admin-body">
                 <div class="room-admin-fields">
@@ -423,8 +500,8 @@ class WC_Hotel_Reserve {
                         <input type="text" name="hotel_rooms[<?php echo $index; ?>][name]" value="<?php echo esc_attr($room['name'] ?? ''); ?>" placeholder="مثال: اتاق دو تخته VIP" required>
                     </div>
                     <div class="room-admin-field">
-                        <label>ظرفیت (تعداد اتاق) *</label>
-                        <input type="number" name="hotel_rooms[<?php echo $index; ?>][capacity]" value="<?php echo esc_attr($room['capacity'] ?? 1); ?>" min="1" required>
+                        <label>ظرفیت (تعداد نفر) *</label>
+                        <input type="number" name="hotel_rooms[<?php echo $index; ?>][guest_capacity]" value="<?php echo esc_attr($room['guest_capacity'] ?? 2); ?>" min="1" required>
                     </div>
                     <div class="room-admin-field">
                         <label>قیمت پایه (تومان/شب) *</label>
@@ -435,8 +512,26 @@ class WC_Hotel_Reserve {
                         <textarea name="hotel_rooms[<?php echo $index; ?>][description]" placeholder="امکانات، توضیحات..."><?php echo esc_textarea($room['description'] ?? ''); ?></textarea>
                     </div>
                 </div>
+
+                <div style="background:#fff3cd;padding:15px;border-radius:8px;margin-bottom:20px;">
+                    <label style="display:flex;align-items:center;cursor:pointer;margin-bottom:10px;">
+                        <input type="checkbox" class="allow-extra-guest" name="hotel_rooms[<?php echo $index; ?>][allow_extra_guest]" value="1" <?php checked($room['allow_extra_guest'] ?? false, true); ?> style="width:18px;height:18px;margin-left:8px;">
+                        <strong>امکان نفر اضافه</strong>
+                    </label>
+                    <div class="extra-guest-fields" style="display:<?php echo (!empty($room['allow_extra_guest']) ? 'grid' : 'none'); ?>;grid-template-columns:1fr 1fr;gap:15px;margin-top:10px;">
+                        <div>
+                            <label style="display:block;margin-bottom:5px;font-size:13px;">حداکثر نفر اضافه</label>
+                            <input type="number" name="hotel_rooms[<?php echo $index; ?>][max_extra_guests]" value="<?php echo esc_attr($room['max_extra_guests'] ?? 0); ?>" min="0" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:5px;font-size:13px;">قیمت هر نفر اضافه (تومان/شب)</label>
+                            <input type="number" name="hotel_rooms[<?php echo $index; ?>][extra_guest_price]" value="<?php echo esc_attr($room['extra_guest_price'] ?? 0); ?>" step="1000" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="date-ranges-section">
-                    <h4 style="margin:0 0 10px 0;">📅 بازه‌های قیمت‌گذاری</h4>
+                    <h4>📅 بازه‌های قیمت‌گذاری</h4>
                     <p style="margin:0 0 10px 0;color:#666;font-size:13px;">می‌توانید برای بازه‌های زمانی مختلف قیمت متفاوت تعیین کنید.</p>
                     <button type="button" class="btn-add-date-range" data-room-index="<?php echo $index; ?>">➕ افزودن بازه قیمت</button>
                     <div class="date-ranges-list" data-room-index="<?php echo $index; ?>">
@@ -448,8 +543,8 @@ class WC_Hotel_Reserve {
                                     <input type="number" class="range-price" value="<?php echo esc_attr($range['price'] ?? ''); ?>" placeholder="قیمت/شب" step="1000">
                                     <button type="button" class="btn-select-date" data-target="from">📅 از</button>
                                     <button type="button" class="btn-select-date" data-target="to">📅 تا</button>
-                                    <label style="white-space:nowrap;"><input type="checkbox" class="range-disabled" <?php checked($range['disabled'] ?? false, true); ?>> غیرفعال</label>
-                                    <button type="button" class="btn-remove-date-range">حذف</button>
+                                    <label style="white-space:nowrap;font-size:12px;"><input type="checkbox" class="range-disabled" <?php checked($range['disabled'] ?? false, true); ?>> غیرفعال</label>
+                                    <button type="button" class="btn-remove-date-range">✕</button>
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -466,21 +561,21 @@ class WC_Hotel_Reserve {
         if ($screen && $screen->id === 'product') {
             ?>
             <div id="admin-calendar-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:999999;align-items:center;justify-content:center;">
-                <div style="background:white;border-radius:12px;width:400px;max-width:90%;">
-                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:15px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
-                        <h3 style="margin:0;">📅 انتخاب تاریخ</h3>
-                        <button type="button" id="admin-cal-close" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">✕</button>
+                <div style="background:white;border-radius:12px;width:450px;max-width:95%;">
+                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:18px 20px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
+                        <h3 style="margin:0;font-size:16px;">📅 انتخاب تاریخ</h3>
+                        <button type="button" id="admin-cal-close" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:16px;">✕</button>
                     </div>
                     <div style="padding:20px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-                            <button type="button" style="background:#667eea;color:white;border:none;padding:8px 12px;border-radius:5px;cursor:pointer;">❮</button>
-                            <div><span id="admin-cal-month"></span> <span id="admin-cal-year"></span></div>
-                            <button type="button" style="background:#667eea;color:white;border:none;padding:8px 12px;border-radius:5px;cursor:pointer;">❯</button>
+                            <button type="button" style="background:#667eea;color:white;border:none;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:bold;">❮</button>
+                            <div style="font-size:16px;font-weight:600;"><span id="admin-cal-month"></span> <span id="admin-cal-year"></span></div>
+                            <button type="button" style="background:#667eea;color:white;border:none;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:bold;">❯</button>
                         </div>
-                        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:10px;text-align:center;font-weight:bold;color:#666;">
+                        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:10px;text-align:center;font-weight:bold;color:#666;font-size:13px;">
                             <div>ش</div><div>ی</div><div>د</div><div>س</div><div>چ</div><div>پ</div><div>ج</div>
                         </div>
-                        <div id="admin-calendar-days" style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;"></div>
+                        <div id="admin-calendar-days" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;"></div>
                     </div>
                 </div>
             </div>
@@ -488,14 +583,18 @@ class WC_Hotel_Reserve {
             #admin-calendar-modal { display: none; }
             #admin-calendar-modal.show { display: flex !important; }
             .admin-cal-day {
-                padding: 10px;
+                padding: 12px;
                 text-align: center;
-                border-radius: 5px;
+                border-radius: 6px;
                 cursor: pointer;
                 background: #f5f5f5;
+                font-size: 14px;
+                transition: all 0.2s;
             }
             .admin-cal-day:hover:not(.empty) {
-                background: #e3f2fd;
+                background: #667eea;
+                color: white;
+                transform: scale(1.1);
             }
             .admin-cal-day.empty {
                 background: transparent;
@@ -507,6 +606,10 @@ class WC_Hotel_Reserve {
     }
 
     public function save_product_meta($post_id) {
+        // فعال/غیرفعال
+        $enabled = isset($_POST['_enable_hotel_reservation']) && $_POST['_enable_hotel_reservation'] === 'yes' ? 'yes' : 'no';
+        update_post_meta($post_id, '_enable_hotel_reservation', $enabled);
+
         if (!isset($_POST['hotel_rooms'])) {
             return;
         }
@@ -525,9 +628,12 @@ class WC_Hotel_Reserve {
                 $rooms[] = [
                     'id' => 'room_' . $post_id . '_' . $index . '_' . time(),
                     'name' => sanitize_text_field($room_data['name']),
-                    'capacity' => intval($room_data['capacity'] ?? 1),
+                    'guest_capacity' => intval($room_data['guest_capacity'] ?? 2),
                     'base_price' => floatval($room_data['base_price']),
                     'description' => sanitize_textarea_field($room_data['description'] ?? ''),
+                    'allow_extra_guest' => isset($room_data['allow_extra_guest']),
+                    'max_extra_guests' => intval($room_data['max_extra_guests'] ?? 0),
+                    'extra_guest_price' => floatval($room_data['extra_guest_price'] ?? 0),
                     'date_ranges' => $date_ranges
                 ];
             }
@@ -540,12 +646,15 @@ class WC_Hotel_Reserve {
         global $product;
         if (!$product || !$product->is_type('simple')) return;
 
+        $enabled = get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes';
+        if (!$enabled) return;
+
         $rooms = get_post_meta($product->get_id(), '_hotel_rooms', true);
         if (empty($rooms) || !is_array($rooms)) return;
 
         ?>
         <div class="hotel-rooms-section" style="margin:30px 0;padding:0;">
-            <h3 style="font-size:22px;margin-bottom:20px;color:#333;">🏨 اتاق‌های موجود</h3>
+            <h3 style="font-size:22px;margin-bottom:20px;color:#333;font-weight:600;">🏨 اتاق‌های موجود</h3>
 
             <div class="rooms-grid" style="display:grid;gap:15px;">
                 <?php foreach ($rooms as $room): ?>
@@ -559,23 +668,26 @@ class WC_Hotel_Reserve {
                         }
                     }
                     ?>
-                    <div class="room-card" style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:15px;display:flex;justify-content:space-between;align-items:center;transition:all 0.3s;" data-room='<?php echo esc_attr(json_encode($room)); ?>'>
+                    <div class="room-card" style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:18px;display:flex;justify-content:space-between;align-items:center;transition:all 0.3s;" data-room='<?php echo esc_attr(json_encode($room)); ?>'>
                         <div style="flex:1;">
-                            <h4 style="margin:0 0 8px 0;font-size:18px;color:#667eea;">🚪 <?php echo esc_html($room['name']); ?></h4>
+                            <h4 style="margin:0 0 10px 0;font-size:18px;color:#667eea;font-weight:600;">🚪 <?php echo esc_html($room['name']); ?></h4>
                             <?php if (!empty($room['description'])): ?>
-                                <p style="margin:0 0 8px 0;color:#666;font-size:14px;"><?php echo esc_html($room['description']); ?></p>
+                                <p style="margin:0 0 10px 0;color:#666;font-size:14px;"><?php echo esc_html($room['description']); ?></p>
                             <?php endif; ?>
                             <div style="color:#999;font-size:13px;">
-                                ظرفیت: <?php echo $room['capacity']; ?> اتاق
+                                👥 ظرفیت: <?php echo $room['guest_capacity']; ?> نفر
+                                <?php if (!empty($room['allow_extra_guest']) && $room['max_extra_guests'] > 0): ?>
+                                    <span style="color:#28a745;font-weight:600;"> + حداکثر <?php echo $room['max_extra_guests']; ?> نفر اضافه</span>
+                                <?php endif; ?>
                             </div>
                         </div>
-                        <div style="text-align:left;padding:0 15px;">
+                        <div style="text-align:left;padding:0 20px;">
                             <div style="color:#999;font-size:12px;margin-bottom:5px;">قیمت از:</div>
-                            <div style="font-size:20px;font-weight:bold;color:#28a745;margin-bottom:10px;">
-                                <?php echo number_format($min_price); ?> <span style="font-size:12px;">تومان/شب</span>
+                            <div style="font-size:22px;font-weight:bold;color:#28a745;margin-bottom:12px;">
+                                <?php echo number_format($min_price); ?> <span style="font-size:13px;">تومان/شب</span>
                             </div>
-                            <button type="button" class="room-reserve-btn" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:bold;">
-                                رزرو
+                            <button type="button" class="room-select-btn" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:12px 22px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;">
+                                📅 انتخاب تاریخ رزرو
                             </button>
                         </div>
                     </div>
@@ -585,12 +697,13 @@ class WC_Hotel_Reserve {
 
         <style>
         .room-card:hover {
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.12);
             border-color: #667eea;
+            transform: translateY(-2px);
         }
-        .room-reserve-btn:hover {
+        .room-select-btn:hover {
             transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.5);
         }
         </style>
         <?php
@@ -602,41 +715,56 @@ class WC_Hotel_Reserve {
         global $product;
         if (!$product || !$product->is_type('simple')) return;
 
+        $enabled = get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes';
+        if (!$enabled) return;
+
         $rooms = get_post_meta($product->get_id(), '_hotel_rooms', true);
         if (empty($rooms)) return;
 
+        $cart_url = wc_get_cart_url();
         ?>
         <!-- Modal تقویم رزرو -->
-        <div id="booking-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999999;align-items:center;justify-content:center;">
-            <div style="background:white;border-radius:15px;max-width:600px;width:95%;max-height:90vh;overflow-y:auto;">
+        <div id="booking-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:999999;align-items:center;justify-content:center;">
+            <div style="background:white;border-radius:15px;max-width:650px;width:95%;max-height:90vh;overflow-y:auto;box-shadow:0 15px 50px rgba(0,0,0,0.5);">
                 <div style="padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border-radius:15px 15px 0 0;display:flex;justify-content:space-between;align-items:center;">
                     <h3 style="margin:0;" id="modal-title">📅 رزرو اتاق</h3>
                     <button type="button" id="close-modal-btn" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:8px 15px;border-radius:5px;cursor:pointer;font-size:18px;">✕</button>
                 </div>
-                <div style="padding:25px;">
-                    <div id="booking-guide" style="background:#e3f2fd;padding:12px;border-radius:8px;margin-bottom:20px;text-align:center;">
-                        <strong>🎯 ابتدا تاریخ ورود را انتخاب کنید</strong>
+                <div style="padding:28px;">
+                    <div id="booking-guide" style="background:#e3f2fd;padding:14px;border-radius:8px;margin-bottom:20px;text-align:center;font-size:15px;font-weight:600;">
+                        🎯 لطفاً تاریخ ورود را انتخاب کنید
                     </div>
+
+                    <!-- انتخاب نفر اضافه -->
+                    <div id="extra-guests-section" style="display:none;background:#fff3cd;padding:15px;border-radius:8px;margin-bottom:20px;">
+                        <label style="display:block;font-weight:600;margin-bottom:10px;">👥 تعداد نفر اضافه:</label>
+                        <select id="extra-guests-select" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;font-size:14px;">
+                            <option value="0">بدون نفر اضافه</option>
+                        </select>
+                        <div id="extra-guests-price-info" style="margin-top:10px;color:#666;font-size:13px;"></div>
+                    </div>
+
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-                        <button type="button" id="prev-month-btn" style="background:#667eea;color:white;border:none;padding:10px 15px;border-radius:5px;cursor:pointer;">❮</button>
+                        <button type="button" id="prev-month-btn" style="background:#667eea;color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:bold;">❮</button>
                         <div id="current-month-display" style="font-weight:bold;font-size:18px;"></div>
-                        <button type="button" id="next-month-btn" style="background:#667eea;color:white;border:none;padding:10px 15px;border-radius:5px;cursor:pointer;">❯</button>
+                        <button type="button" id="next-month-btn" style="background:#667eea;color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-weight:bold;">❯</button>
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:10px;text-align:center;font-weight:bold;color:#666;">
+                    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px;text-align:center;font-weight:bold;color:#666;font-size:13px;">
                         <div>ش</div><div>ی</div><div>د</div><div>س</div><div>چ</div><div>پ</div><div>ج</div>
                     </div>
                     <div id="calendar-days-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;"></div>
-                    <div id="booking-summary" style="display:none;background:#f0f8ff;padding:20px;border-radius:10px;margin-top:20px;">
-                        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin-bottom:15px;">
-                            <div><small style="color:#666;">تاریخ ورود</small><div style="font-weight:bold;color:#667eea;" id="sum-checkin">-</div></div>
-                            <div><small style="color:#666;">تاریخ خروج</small><div style="font-weight:bold;color:#11998e;" id="sum-checkout">-</div></div>
+                    <div id="booking-summary" style="display:none;background:#f0f8ff;padding:22px;border-radius:10px;margin-top:22px;border:2px solid #2196f3;">
+                        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:18px;">
+                            <div><small style="color:#666;font-size:12px;">تاریخ ورود</small><div style="font-weight:bold;color:#667eea;font-size:15px;" id="sum-checkin">-</div></div>
+                            <div><small style="color:#666;font-size:12px;">تاریخ خروج</small><div style="font-weight:bold;color:#11998e;font-size:15px;" id="sum-checkout">-</div></div>
                         </div>
-                        <div><strong>✓ تعداد شب‌ها:</strong> <span id="sum-nights">0</span> شب</div>
-                        <div style="margin-top:10px;"><strong>💰 قیمت کل:</strong> <span id="sum-price">0</span> تومان</div>
-                        <div id="price-detail" style="font-size:13px;color:#666;margin-top:10px;max-height:100px;overflow-y:auto;"></div>
+                        <div style="margin-bottom:12px;"><strong>✓ تعداد شب‌ها:</strong> <span id="sum-nights">0</span> شب</div>
+                        <div style="margin-bottom:12px;" id="sum-extra-info"></div>
+                        <div style="margin-bottom:12px;font-size:18px;"><strong style="color:#28a745;">💰 قیمت کل:</strong> <span id="sum-price" style="font-weight:bold;color:#28a745;">0</span> تومان</div>
+                        <div id="price-detail" style="font-size:13px;color:#666;max-height:120px;overflow-y:auto;border-top:1px solid #ddd;padding-top:12px;"></div>
                     </div>
-                    <button type="button" id="add-to-cart-final" style="display:none;background:linear-gradient(135deg,#11998e,#38ef7d);color:white;padding:15px;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-weight:bold;width:100%;margin-top:20px;">
-                        ✓ افزودن به سبد خرید
+                    <button type="button" id="reserve-room-btn" style="display:none;background:linear-gradient(135deg,#11998e,#38ef7d);color:white;padding:16px;border:none;border-radius:8px;cursor:pointer;font-size:17px;font-weight:bold;width:100%;margin-top:20px;box-shadow:0 4px 15px rgba(17,153,142,0.4);">
+                        ✓ رزرو اتاق
                     </button>
                 </div>
             </div>
@@ -646,25 +774,27 @@ class WC_Hotel_Reserve {
         #booking-modal { display: none; }
         #booking-modal.active { display: flex !important; }
         .cal-day {
-            padding: 12px;
+            padding: 13px;
             text-align: center;
             border-radius: 8px;
             cursor: pointer;
             background: #f8f9fa;
             border: 2px solid transparent;
             transition: all 0.3s;
-            min-height: 45px;
+            min-height: 48px;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-weight: 500;
         }
         .cal-day:hover:not(.disabled):not(.past):not(.empty) {
             background: #e3f2fd;
             transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
         .cal-day.disabled, .cal-day.past { background: #f5f5f5; color: #ccc; cursor: not-allowed; }
-        .cal-day.selected-in { background: linear-gradient(135deg,#667eea,#764ba2); color: white; font-weight: bold; }
-        .cal-day.selected-out { background: linear-gradient(135deg,#11998e,#38ef7d); color: white; font-weight: bold; }
+        .cal-day.selected-in { background: linear-gradient(135deg,#667eea,#764ba2); color: white; font-weight: bold; border-color: #667eea; }
+        .cal-day.selected-out { background: linear-gradient(135deg,#11998e,#38ef7d); color: white; font-weight: bold; border-color: #11998e; }
         .cal-day.in-range { background: #fff3cd; border-color: #ffc107; }
         .cal-day.empty { background: transparent; cursor: default; }
         </style>
@@ -676,6 +806,7 @@ class WC_Hotel_Reserve {
             var selectedCheckIn = null;
             var selectedCheckOut = null;
             var selectingMode = 'checkin';
+            var selectedExtraGuests = 0;
 
             var persianMonths = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
 
@@ -770,33 +901,61 @@ class WC_Hotel_Reserve {
             function calculatePrice() {
                 if (!selectedCheckIn || !selectedCheckOut || !currentRoom) return;
 
+                selectedExtraGuests = parseInt($('#extra-guests-select').val() || 0);
+
                 $.post(woocommerce_params.ajax_url, {
                     action: 'hotel_check_room_availability',
                     room_data: JSON.stringify(currentRoom),
                     check_in: selectedCheckIn,
                     check_out: selectedCheckOut,
+                    extra_guests: selectedExtraGuests,
                     nonce: '<?php echo wp_create_nonce("hotel_booking"); ?>'
                 }, function(response) {
                     if (response.success) {
                         var data = response.data;
                         $('#sum-nights').text(data.nights);
+
+                        if (selectedExtraGuests > 0) {
+                            $('#sum-extra-info').html('<strong>👥 نفرات اضافه:</strong> ' + selectedExtraGuests + ' نفر').show();
+                        } else {
+                            $('#sum-extra-info').hide();
+                        }
+
                         $('#sum-price').text(data.total.toLocaleString('fa-IR'));
 
-                        var detail = '';
+                        var detail = '<strong>جزئیات قیمت:</strong><br>';
                         data.breakdown.forEach(function(item) {
-                            detail += '<div>' + item.date + ': ' + item.price.toLocaleString('fa-IR') + ' تومان</div>';
+                            detail += item.date + ': ' + item.price.toLocaleString('fa-IR') + ' تومان<br>';
                         });
+
+                        if (data.extra_guest_total > 0) {
+                            detail += '<br><strong>نفرات اضافه:</strong> ' + data.extra_guest_total.toLocaleString('fa-IR') + ' تومان';
+                        }
+
                         $('#price-detail').html(detail);
 
                         $('#booking-summary').show();
-                        $('#add-to-cart-final').show();
+                        $('#reserve-room-btn').show();
                     }
                 });
             }
 
-            $('.room-reserve-btn').on('click', function() {
+            $('.room-select-btn').on('click', function() {
                 currentRoom = JSON.parse($(this).closest('.room-card').attr('data-room'));
                 $('#modal-title').text('📅 رزرو ' + currentRoom.name);
+
+                // تنظیم نفرات اضافه
+                if (currentRoom.allow_extra_guest && currentRoom.max_extra_guests > 0) {
+                    var options = '<option value="0">بدون نفر اضافه</option>';
+                    for (var i = 1; i <= currentRoom.max_extra_guests; i++) {
+                        options += '<option value="' + i + '">' + i + ' نفر (هر نفر: ' + currentRoom.extra_guest_price.toLocaleString('fa-IR') + ' تومان/شب)</option>';
+                    }
+                    $('#extra-guests-select').html(options);
+                    $('#extra-guests-price-info').text('قیمت هر نفر اضافه: ' + currentRoom.extra_guest_price.toLocaleString('fa-IR') + ' تومان در شب');
+                    $('#extra-guests-section').show();
+                } else {
+                    $('#extra-guests-section').hide();
+                }
 
                 var today = getTodayJalali();
                 currentYear = today[0];
@@ -804,10 +963,11 @@ class WC_Hotel_Reserve {
                 selectedCheckIn = null;
                 selectedCheckOut = null;
                 selectingMode = 'checkin';
+                selectedExtraGuests = 0;
 
-                $('#booking-guide').html('<strong>🎯 ابتدا تاریخ ورود را انتخاب کنید</strong>');
+                $('#booking-guide').html('🎯 لطفاً تاریخ ورود را انتخاب کنید');
                 $('#booking-summary').hide();
-                $('#add-to-cart-final').hide();
+                $('#reserve-room-btn').hide();
 
                 renderCalendar();
                 $('#booking-modal').addClass('active');
@@ -830,18 +990,24 @@ class WC_Hotel_Reserve {
                     selectingMode = 'checkout';
                     $('#sum-checkin').text(dateStr);
                     $('#sum-checkout').text('-');
-                    $('#booking-guide').html('<strong>🎯 حالا تاریخ خروج را انتخاب کنید</strong>');
+                    $('#booking-guide').html('🎯 حالا لطفاً تاریخ خروج را انتخاب کنید');
                     $('#booking-summary').hide();
-                    $('#add-to-cart-final').hide();
+                    $('#reserve-room-btn').hide();
                     renderCalendar();
                 } else {
                     if (dateStr <= selectedCheckIn) {
-                        alert('تاریخ خروج باید بعد از تاریخ ورود باشد');
+                        alert('❌ تاریخ خروج باید بعد از تاریخ ورود باشد');
                         return;
                     }
                     selectedCheckOut = dateStr;
                     $('#sum-checkout').text(dateStr);
                     renderCalendar();
+                    calculatePrice();
+                }
+            });
+
+            $('#extra-guests-select').on('change', function() {
+                if (selectedCheckIn && selectedCheckOut) {
                     calculatePrice();
                 }
             });
@@ -858,9 +1024,9 @@ class WC_Hotel_Reserve {
                 renderCalendar();
             });
 
-            $('#add-to-cart-final').on('click', function() {
+            $('#reserve-room-btn').on('click', function() {
                 var btn = $(this);
-                btn.prop('disabled', true).text('در حال افزودن...');
+                btn.prop('disabled', true).text('در حال رزرو...');
 
                 $.post(woocommerce_params.ajax_url, {
                     action: 'hotel_add_room_to_cart',
@@ -868,16 +1034,16 @@ class WC_Hotel_Reserve {
                     room_data: JSON.stringify(currentRoom),
                     check_in: selectedCheckIn,
                     check_out: selectedCheckOut,
+                    extra_guests: selectedExtraGuests,
                     nonce: '<?php echo wp_create_nonce("hotel_add_cart"); ?>'
                 }, function(response) {
                     if (response.success) {
-                        alert('✓ اتاق با موفقیت به سبد خرید اضافه شد!');
-                        $('#booking-modal').removeClass('active');
-                        $(document.body).trigger('wc_fragment_refresh');
+                        // انتقال به صفحه سبد خرید
+                        window.location.href = '<?php echo esc_js($cart_url); ?>';
                     } else {
-                        alert('خطا: ' + (response.data ? response.data.message : 'خطای نامشخص'));
+                        alert('❌ خطا: ' + (response.data ? response.data.message : 'خطای نامشخص'));
+                        btn.prop('disabled', false).text('✓ رزرو اتاق');
                     }
-                    btn.prop('disabled', false).text('✓ افزودن به سبد خرید');
                 });
             });
         });
@@ -891,14 +1057,15 @@ class WC_Hotel_Reserve {
         $room_data = json_decode(stripslashes($_POST['room_data']), true);
         $check_in = sanitize_text_field($_POST['check_in']);
         $check_out = sanitize_text_field($_POST['check_out']);
+        $extra_guests = intval($_POST['extra_guests'] ?? 0);
 
-        $pricing = $this->calculate_room_price($room_data, $check_in, $check_out);
+        $pricing = $this->calculate_room_price($room_data, $check_in, $check_out, $extra_guests);
         $availability = ['available' => true];
 
         wp_send_json_success(array_merge($availability, $pricing));
     }
 
-    private function calculate_room_price($room, $check_in, $check_out) {
+    private function calculate_room_price($room, $check_in, $check_out, $extra_guests = 0) {
         $check_in_parts = explode('/', $check_in);
         $check_out_parts = explode('/', $check_out);
 
@@ -938,10 +1105,18 @@ class WC_Hotel_Reserve {
             $current->modify('+1 day');
         }
 
+        // محاسبه نفرات اضافه
+        $extra_guest_total = 0;
+        if ($extra_guests > 0 && !empty($room['extra_guest_price'])) {
+            $extra_guest_total = $extra_guests * $nights * floatval($room['extra_guest_price']);
+            $total_price += $extra_guest_total;
+        }
+
         return [
             'total' => $total_price,
             'nights' => $nights,
-            'breakdown' => $breakdown
+            'breakdown' => $breakdown,
+            'extra_guest_total' => $extra_guest_total
         ];
     }
 
@@ -952,21 +1127,23 @@ class WC_Hotel_Reserve {
         $room_data = json_decode(stripslashes($_POST['room_data']), true);
         $check_in = sanitize_text_field($_POST['check_in']);
         $check_out = sanitize_text_field($_POST['check_out']);
+        $extra_guests = intval($_POST['extra_guests'] ?? 0);
 
         $cart_item_data = [
             'hotel_room_id' => $room_data['id'],
             'hotel_room_name' => $room_data['name'],
             'hotel_check_in' => $check_in,
             'hotel_check_out' => $check_out,
+            'hotel_extra_guests' => $extra_guests,
             'hotel_room_data' => $room_data
         ];
 
         $added = WC()->cart->add_to_cart($product_id, 1, 0, [], $cart_item_data);
 
         if ($added) {
-            wp_send_json_success(['message' => 'اتاق به سبد خرید اضافه شد']);
+            wp_send_json_success(['message' => 'اتاق رزرو شد']);
         } else {
-            wp_send_json_error(['message' => 'خطا در افزودن به سبد خرید']);
+            wp_send_json_error(['message' => 'خطا در رزرو اتاق']);
         }
     }
 
@@ -978,7 +1155,8 @@ class WC_Hotel_Reserve {
                 $pricing = $this->calculate_room_price(
                     $cart_item['hotel_room_data'],
                     $cart_item['hotel_check_in'],
-                    $cart_item['hotel_check_out']
+                    $cart_item['hotel_check_out'],
+                    $cart_item['hotel_extra_guests'] ?? 0
                 );
                 $cart_item['data']->set_price($pricing['total']);
             }
@@ -987,21 +1165,25 @@ class WC_Hotel_Reserve {
 
     public function display_cart_item_data($item_data, $cart_item) {
         if (isset($cart_item['hotel_room_name'])) {
-            $item_data[] = ['name' => 'اتاق', 'value' => $cart_item['hotel_room_name']];
+            $item_data[] = ['name' => '🚪 اتاق', 'value' => $cart_item['hotel_room_name']];
         }
         if (isset($cart_item['hotel_check_in'])) {
-            $item_data[] = ['name' => 'تاریخ ورود', 'value' => $cart_item['hotel_check_in']];
+            $item_data[] = ['name' => '📅 ورود', 'value' => $cart_item['hotel_check_in']];
         }
         if (isset($cart_item['hotel_check_out'])) {
-            $item_data[] = ['name' => 'تاریخ خروج', 'value' => $cart_item['hotel_check_out']];
+            $item_data[] = ['name' => '📅 خروج', 'value' => $cart_item['hotel_check_out']];
         }
         if (isset($cart_item['hotel_room_data'])) {
             $pricing = $this->calculate_room_price(
                 $cart_item['hotel_room_data'],
                 $cart_item['hotel_check_in'],
-                $cart_item['hotel_check_out']
+                $cart_item['hotel_check_out'],
+                $cart_item['hotel_extra_guests'] ?? 0
             );
-            $item_data[] = ['name' => 'تعداد شب', 'value' => $pricing['nights'] . ' شب'];
+            $item_data[] = ['name' => '🌙 تعداد شب', 'value' => $pricing['nights'] . ' شب'];
+        }
+        if (isset($cart_item['hotel_extra_guests']) && $cart_item['hotel_extra_guests'] > 0) {
+            $item_data[] = ['name' => '👥 نفرات اضافه', 'value' => $cart_item['hotel_extra_guests'] . ' نفر'];
         }
         return $item_data;
     }
@@ -1017,6 +1199,9 @@ class WC_Hotel_Reserve {
         if (isset($values['hotel_check_out'])) {
             $item->add_meta_data('_hotel_check_out', $values['hotel_check_out'], false);
             $item->add_meta_data('تاریخ خروج', $values['hotel_check_out'], true);
+        }
+        if (isset($values['hotel_extra_guests']) && $values['hotel_extra_guests'] > 0) {
+            $item->add_meta_data('نفرات اضافه', $values['hotel_extra_guests'] . ' نفر', true);
         }
         if (isset($values['hotel_room_data'])) {
             $item->add_meta_data('_hotel_room_data', $values['hotel_room_data'], false);
