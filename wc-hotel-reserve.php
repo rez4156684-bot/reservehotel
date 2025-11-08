@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce Hotel Reservation System - Professional Edition
  * Description: سیستم پیشرفته رزرو هتل برای محصولات ساده ووکامرس
- * Version: 10.0.0
+ * Version: 10.1.0
  * Author: بهادر
  * Text Domain: wc-hotel-reserve
  */
@@ -34,7 +34,7 @@ class WC_Hotel_Reserve {
         add_action('admin_footer', [$this, 'admin_calendar_modal']);
 
         // نمایش در صفحه محصول
-        add_action('woocommerce_before_add_to_cart_button', [$this, 'display_hotel_rooms']);
+        add_action('woocommerce_after_single_product_summary', [$this, 'display_hotel_rooms'], 5);
         add_action('wp_footer', [$this, 'frontend_scripts']);
 
         // مخفی کردن دکمه افزودن به سبد و quantity
@@ -146,6 +146,11 @@ class WC_Hotel_Reserve {
             gap: 20px;
             margin-bottom: 20px;
         }
+        @media (max-width: 768px) {
+            .room-admin-fields {
+                grid-template-columns: 1fr;
+            }
+        }
         .room-admin-field label {
             display: block;
             font-weight: 600;
@@ -161,6 +166,7 @@ class WC_Hotel_Reserve {
             border-radius: 6px;
             font-size: 14px;
             transition: border 0.3s;
+            box-sizing: border-box;
         }
         .room-admin-field input:focus,
         .room-admin-field textarea:focus {
@@ -187,15 +193,33 @@ class WC_Hotel_Reserve {
             padding: 15px;
             margin-bottom: 15px;
             display: grid;
-            grid-template-columns: 1.5fr 1.5fr 1.2fr auto auto auto auto;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
             align-items: center;
         }
-        .date-range-item input {
+        @media (min-width: 1200px) {
+            .date-range-item {
+                grid-template-columns: 1.5fr 1.5fr 1.2fr auto auto auto auto;
+            }
+        }
+        @media (max-width: 1199px) and (min-width: 768px) {
+            .date-range-item {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 767px) {
+            .date-range-item {
+                grid-template-columns: 1fr;
+            }
+        }
+        .date-range-item input[type="text"],
+        .date-range-item input[type="number"] {
             padding: 10px;
             border: 2px solid #e0e0e0;
             border-radius: 6px;
             font-size: 13px;
+            width: 100%;
+            box-sizing: border-box;
         }
         .btn-remove-room {
             background: #dc3545;
@@ -222,10 +246,11 @@ class WC_Hotel_Reserve {
             background: #dc3545;
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 8px 14px;
             border-radius: 5px;
             cursor: pointer;
             font-size: 12px;
+            white-space: nowrap;
         }
         .btn-select-date {
             background: #2196f3;
@@ -236,6 +261,13 @@ class WC_Hotel_Reserve {
             cursor: pointer;
             font-size: 12px;
             white-space: nowrap;
+        }
+        .date-range-item label {
+            white-space: nowrap;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
         </style>
 
@@ -302,11 +334,11 @@ class WC_Hotel_Reserve {
                             '<div class="extra-guest-fields" style="display:' + (data.allow_extra_guest ? 'grid' : 'none') + ';grid-template-columns:1fr 1fr;gap:15px;margin-top:10px;">' +
                                 '<div>' +
                                     '<label style="display:block;margin-bottom:5px;font-size:13px;">حداکثر نفر اضافه</label>' +
-                                    '<input type="number" name="hotel_rooms[' + index + '][max_extra_guests]" value="' + (data.max_extra_guests || 0) + '" min="0" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">' +
+                                    '<input type="number" name="hotel_rooms[' + index + '][max_extra_guests]" value="' + (data.max_extra_guests || 0) + '" min="0" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box;">' +
                                 '</div>' +
                                 '<div>' +
                                     '<label style="display:block;margin-bottom:5px;font-size:13px;">قیمت هر نفر اضافه (تومان/شب)</label>' +
-                                    '<input type="number" name="hotel_rooms[' + index + '][extra_guest_price]" value="' + (data.extra_guest_price || 0) + '" step="1000" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">' +
+                                    '<input type="number" name="hotel_rooms[' + index + '][extra_guest_price]" value="' + (data.extra_guest_price || 0) + '" step="1000" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box;">' +
                                 '</div>' +
                             '</div>' +
                         '</div>' +
@@ -348,7 +380,7 @@ class WC_Hotel_Reserve {
                     '<input type="number" class="range-price" placeholder="قیمت/شب" step="1000">' +
                     '<button type="button" class="btn-select-date" data-target="from">📅 از</button>' +
                     '<button type="button" class="btn-select-date" data-target="to">📅 تا</button>' +
-                    '<label style="white-space:nowrap;font-size:12px;"><input type="checkbox" class="range-disabled"> غیرفعال</label>' +
+                    '<label><input type="checkbox" class="range-disabled"> غیرفعال</label>' +
                     '<button type="button" class="btn-remove-date-range">✕</button>' +
                 '</div>';
 
@@ -521,11 +553,11 @@ class WC_Hotel_Reserve {
                     <div class="extra-guest-fields" style="display:<?php echo (!empty($room['allow_extra_guest']) ? 'grid' : 'none'); ?>;grid-template-columns:1fr 1fr;gap:15px;margin-top:10px;">
                         <div>
                             <label style="display:block;margin-bottom:5px;font-size:13px;">حداکثر نفر اضافه</label>
-                            <input type="number" name="hotel_rooms[<?php echo $index; ?>][max_extra_guests]" value="<?php echo esc_attr($room['max_extra_guests'] ?? 0); ?>" min="0" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">
+                            <input type="number" name="hotel_rooms[<?php echo $index; ?>][max_extra_guests]" value="<?php echo esc_attr($room['max_extra_guests'] ?? 0); ?>" min="0" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box;">
                         </div>
                         <div>
                             <label style="display:block;margin-bottom:5px;font-size:13px;">قیمت هر نفر اضافه (تومان/شب)</label>
-                            <input type="number" name="hotel_rooms[<?php echo $index; ?>][extra_guest_price]" value="<?php echo esc_attr($room['extra_guest_price'] ?? 0); ?>" step="1000" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;">
+                            <input type="number" name="hotel_rooms[<?php echo $index; ?>][extra_guest_price]" value="<?php echo esc_attr($room['extra_guest_price'] ?? 0); ?>" step="1000" style="width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box;">
                         </div>
                     </div>
                 </div>
@@ -543,7 +575,7 @@ class WC_Hotel_Reserve {
                                     <input type="number" class="range-price" value="<?php echo esc_attr($range['price'] ?? ''); ?>" placeholder="قیمت/شب" step="1000">
                                     <button type="button" class="btn-select-date" data-target="from">📅 از</button>
                                     <button type="button" class="btn-select-date" data-target="to">📅 تا</button>
-                                    <label style="white-space:nowrap;font-size:12px;"><input type="checkbox" class="range-disabled" <?php checked($range['disabled'] ?? false, true); ?>> غیرفعال</label>
+                                    <label><input type="checkbox" class="range-disabled" <?php checked($range['disabled'] ?? false, true); ?>> غیرفعال</label>
                                     <button type="button" class="btn-remove-date-range">✕</button>
                                 </div>
                             <?php endforeach; ?>
@@ -611,6 +643,7 @@ class WC_Hotel_Reserve {
         update_post_meta($post_id, '_enable_hotel_reservation', $enabled);
 
         if (!isset($_POST['hotel_rooms'])) {
+            delete_post_meta($post_id, '_hotel_rooms');
             return;
         }
 
@@ -644,16 +677,25 @@ class WC_Hotel_Reserve {
 
     public function display_hotel_rooms() {
         global $product;
-        if (!$product || !$product->is_type('simple')) return;
 
-        $enabled = get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes';
-        if (!$enabled) return;
+        if (!$product || !$product->is_type('simple')) {
+            return;
+        }
+
+        $enabled = get_post_meta($product->get_id(), '_enable_hotel_reservation', true);
+
+        if ($enabled !== 'yes') {
+            return;
+        }
 
         $rooms = get_post_meta($product->get_id(), '_hotel_rooms', true);
-        if (empty($rooms) || !is_array($rooms)) return;
+
+        if (empty($rooms) || !is_array($rooms)) {
+            return;
+        }
 
         ?>
-        <div class="hotel-rooms-section" style="margin:30px 0;padding:0;">
+        <div class="hotel-rooms-section" style="margin:30px 0;padding:20px;background:#fff;border-radius:10px;">
             <h3 style="font-size:22px;margin-bottom:20px;color:#333;font-weight:600;">🏨 اتاق‌های موجود</h3>
 
             <div class="rooms-grid" style="display:grid;gap:15px;">
@@ -668,8 +710,8 @@ class WC_Hotel_Reserve {
                         }
                     }
                     ?>
-                    <div class="room-card" style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:18px;display:flex;justify-content:space-between;align-items:center;transition:all 0.3s;" data-room='<?php echo esc_attr(json_encode($room)); ?>'>
-                        <div style="flex:1;">
+                    <div class="room-card" style="background:#f8f9fa;border:2px solid #e0e0e0;border-radius:10px;padding:18px;display:flex;justify-content:space-between;align-items:center;transition:all 0.3s;flex-wrap:wrap;gap:15px;" data-room='<?php echo esc_attr(json_encode($room)); ?>'>
+                        <div style="flex:1;min-width:250px;">
                             <h4 style="margin:0 0 10px 0;font-size:18px;color:#667eea;font-weight:600;">🚪 <?php echo esc_html($room['name']); ?></h4>
                             <?php if (!empty($room['description'])): ?>
                                 <p style="margin:0 0 10px 0;color:#666;font-size:14px;"><?php echo esc_html($room['description']); ?></p>
@@ -705,6 +747,17 @@ class WC_Hotel_Reserve {
             transform: scale(1.05);
             box-shadow: 0 5px 15px rgba(102,126,234,0.5);
         }
+        @media (max-width: 768px) {
+            .room-card {
+                flex-direction: column;
+                text-align: center;
+            }
+            .room-card > div {
+                width: 100%;
+                text-align: center !important;
+                padding: 0 !important;
+            }
+        }
         </style>
         <?php
     }
@@ -715,8 +768,8 @@ class WC_Hotel_Reserve {
         global $product;
         if (!$product || !$product->is_type('simple')) return;
 
-        $enabled = get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes';
-        if (!$enabled) return;
+        $enabled = get_post_meta($product->get_id(), '_enable_hotel_reservation', true);
+        if ($enabled !== 'yes') return;
 
         $rooms = get_post_meta($product->get_id(), '_hotel_rooms', true);
         if (empty($rooms)) return;
