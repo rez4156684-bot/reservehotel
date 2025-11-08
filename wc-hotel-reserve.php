@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce Hotel Reservation System - Professional Edition
  * Description: سیستم پیشرفته رزرو هتل برای محصولات ساده ووکامرس
- * Version: 10.2.0
+ * Version: 10.3.0
  * Author: بهادر
  * Text Domain: wc-hotel-reserve
  */
@@ -37,9 +37,8 @@ class WC_Hotel_Reserve {
         add_action('woocommerce_after_single_product_summary', [$this, 'display_hotel_rooms'], 5);
         add_action('wp_footer', [$this, 'frontend_scripts']);
 
-        // مخفی کردن دکمه افزودن به سبد و quantity
-        add_filter('woocommerce_is_purchasable', [$this, 'hide_add_to_cart_button'], 10, 2);
-        add_action('woocommerce_single_product_summary', [$this, 'hide_quantity_field'], 1);
+        // مخفی کردن فرم افزودن به سبد و quantity
+        add_action('woocommerce_single_product_summary', [$this, 'hide_default_cart_elements'], 1);
 
         // AJAX
         add_action('wp_ajax_hotel_check_room_availability', [$this, 'ajax_check_availability']);
@@ -53,17 +52,16 @@ class WC_Hotel_Reserve {
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'save_order_item_meta'], 10, 4);
     }
 
-    public function hide_add_to_cart_button($purchasable, $product) {
-        if (get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes') {
-            return false;
-        }
-        return $purchasable;
-    }
-
-    public function hide_quantity_field() {
+    public function hide_default_cart_elements() {
         global $product;
         if ($product && get_post_meta($product->get_id(), '_enable_hotel_reservation', true) === 'yes') {
-            echo '<style>.quantity { display: none !important; }</style>';
+            // مخفی کردن فرم افزودن به سبد، quantity و دکمه add to cart با CSS
+            // محصول همچنان purchasable است ولی UI نمایش داده نمیشود
+            echo '<style>
+                form.cart { display: none !important; }
+                .quantity { display: none !important; }
+                .single_add_to_cart_button { display: none !important; }
+            </style>';
         }
     }
 
@@ -199,7 +197,7 @@ class WC_Hotel_Reserve {
         }
         @media (min-width: 1200px) {
             .date-range-item {
-                grid-template-columns: 2fr 1.2fr auto auto auto;
+                grid-template-columns: 2fr 1.2fr auto auto;
             }
         }
         @media (max-width: 1199px) and (min-width: 768px) {
@@ -261,13 +259,6 @@ class WC_Hotel_Reserve {
             cursor: pointer;
             font-size: 12px;
             white-space: nowrap;
-        }
-        .date-range-item label {
-            white-space: nowrap;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
         }
         </style>
 
@@ -378,7 +369,6 @@ class WC_Hotel_Reserve {
                     '<input type="text" class="range-dates" placeholder="انتخاب بازه تاریخ" readonly style="cursor:pointer;">' +
                     '<input type="number" class="range-price" placeholder="قیمت/شب" step="1000">' +
                     '<button type="button" class="btn-select-date-range">📅 انتخاب تاریخ</button>' +
-                    '<label><input type="checkbox" class="range-disabled"> غیرفعال</label>' +
                     '<button type="button" class="btn-remove-date-range">✕</button>' +
                     '<input type="hidden" class="range-from">' +
                     '<input type="hidden" class="range-to">' +
@@ -416,14 +406,12 @@ class WC_Hotel_Reserve {
                         var from = $(this).find('.range-from').val();
                         var to = $(this).find('.range-to').val();
                         var price = $(this).find('.range-price').val();
-                        var disabled = $(this).find('.range-disabled').is(':checked');
 
                         if (from && to) {
                             ranges.push({
                                 from: from,
                                 to: to,
-                                price: price || 0,
-                                disabled: disabled
+                                price: price || 0
                             });
                         }
                     });
@@ -636,7 +624,6 @@ class WC_Hotel_Reserve {
                                     <input type="text" class="range-dates" value="<?php echo esc_attr($range['from'] . ' تا ' . $range['to']); ?>" placeholder="انتخاب بازه تاریخ" readonly style="cursor:pointer;">
                                     <input type="number" class="range-price" value="<?php echo esc_attr($range['price'] ?? ''); ?>" placeholder="قیمت/شب" step="1000">
                                     <button type="button" class="btn-select-date-range">📅 انتخاب تاریخ</button>
-                                    <label><input type="checkbox" class="range-disabled" <?php checked($range['disabled'] ?? false, true); ?>> غیرفعال</label>
                                     <button type="button" class="btn-remove-date-range">✕</button>
                                     <input type="hidden" class="range-from" value="<?php echo esc_attr($range['from']); ?>">
                                     <input type="hidden" class="range-to" value="<?php echo esc_attr($range['to']); ?>">
