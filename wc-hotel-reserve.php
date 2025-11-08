@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce Hotel Reservation System - Professional Edition
  * Description: سیستم پیشرفته رزرو هتل برای محصولات ساده ووکامرس
- * Version: 10.1.0
+ * Version: 10.2.0
  * Author: بهادر
  * Text Domain: wc-hotel-reserve
  */
@@ -199,7 +199,7 @@ class WC_Hotel_Reserve {
         }
         @media (min-width: 1200px) {
             .date-range-item {
-                grid-template-columns: 1.5fr 1.5fr 1.2fr auto auto auto auto;
+                grid-template-columns: 2fr 1.2fr auto auto auto;
             }
         }
         @media (max-width: 1199px) and (min-width: 768px) {
@@ -252,7 +252,7 @@ class WC_Hotel_Reserve {
             font-size: 12px;
             white-space: nowrap;
         }
-        .btn-select-date {
+        .btn-select-date-range {
             background: #2196f3;
             color: white;
             border: none;
@@ -375,13 +375,13 @@ class WC_Hotel_Reserve {
                 var container = $('.date-ranges-list[data-room-index="' + roomIndex + '"]');
 
                 var html = '<div class="date-range-item">' +
-                    '<input type="text" class="range-from" placeholder="از: 1403/09/15" readonly>' +
-                    '<input type="text" class="range-to" placeholder="تا: 1403/09/20" readonly>' +
+                    '<input type="text" class="range-dates" placeholder="انتخاب بازه تاریخ" readonly style="cursor:pointer;">' +
                     '<input type="number" class="range-price" placeholder="قیمت/شب" step="1000">' +
-                    '<button type="button" class="btn-select-date" data-target="from">📅 از</button>' +
-                    '<button type="button" class="btn-select-date" data-target="to">📅 تا</button>' +
+                    '<button type="button" class="btn-select-date-range">📅 انتخاب تاریخ</button>' +
                     '<label><input type="checkbox" class="range-disabled"> غیرفعال</label>' +
                     '<button type="button" class="btn-remove-date-range">✕</button>' +
+                    '<input type="hidden" class="range-from">' +
+                    '<input type="hidden" class="range-to">' +
                 '</div>';
 
                 container.append(html);
@@ -392,24 +392,18 @@ class WC_Hotel_Reserve {
                 $(this).closest('.date-range-item').remove();
             });
 
-            // باز کردن تقویم برای انتخاب تاریخ
-            var currentDateField = null;
+            // باز کردن تقویم برای انتخاب بازه
+            var currentRangeItem = null;
 
-            $(document).on('click', '.btn-select-date', function() {
-                var target = $(this).data('target');
-                var rangeItem = $(this).closest('.date-range-item');
-
-                if (target === 'from') {
-                    currentDateField = rangeItem.find('.range-from');
-                } else {
-                    currentDateField = rangeItem.find('.range-to');
-                }
-
+            $(document).on('click', '.btn-select-date-range', function() {
+                currentRangeItem = $(this).closest('.date-range-item');
                 openAdminCalendar();
             });
 
             function openAdminCalendar() {
                 $('#admin-calendar-modal').fadeIn();
+                window.adminSelectedFrom = null;
+                window.adminSelectedTo = null;
                 renderAdminCalendar();
             }
 
@@ -439,33 +433,82 @@ class WC_Hotel_Reserve {
             });
 
             // تقویم ادمین
+            window.adminSelectedFrom = null;
+            window.adminSelectedTo = null;
+            window.adminCurrentYear = null;
+            window.adminCurrentMonth = null;
+
             window.adminCalendarSelectDate = function(dateStr) {
-                if (currentDateField) {
-                    currentDateField.val(dateStr);
+                if (!window.adminSelectedFrom) {
+                    window.adminSelectedFrom = dateStr;
+                    renderAdminCalendar();
+                } else if (!window.adminSelectedTo) {
+                    if (dateStr <= window.adminSelectedFrom) {
+                        alert('❌ تاریخ پایان باید بعد از تاریخ شروع باشد');
+                        return;
+                    }
+                    window.adminSelectedTo = dateStr;
+
+                    if (currentRangeItem) {
+                        currentRangeItem.find('.range-from').val(window.adminSelectedFrom);
+                        currentRangeItem.find('.range-to').val(window.adminSelectedTo);
+                        currentRangeItem.find('.range-dates').val(window.adminSelectedFrom + ' تا ' + window.adminSelectedTo);
+                    }
+
+                    $('#admin-calendar-modal').fadeOut();
+                    window.adminSelectedFrom = null;
+                    window.adminSelectedTo = null;
+                } else {
+                    window.adminSelectedFrom = dateStr;
+                    window.adminSelectedTo = null;
+                    renderAdminCalendar();
                 }
-                $('#admin-calendar-modal').fadeOut();
             };
 
             window.renderAdminCalendar = function() {
                 var today = new Date();
                 var jalali = gregorianToJalali(today.getFullYear(), today.getMonth() + 1, today.getDate());
-                var year = jalali[0];
-                var month = jalali[1];
 
-                $('#admin-cal-year').text(year);
-                $('#admin-cal-month').text(getPersianMonth(month));
+                if (!window.adminCurrentYear || !window.adminCurrentMonth) {
+                    window.adminCurrentYear = jalali[0];
+                    window.adminCurrentMonth = jalali[1];
+                }
+
+                $('#admin-cal-year').text(window.adminCurrentYear);
+                $('#admin-cal-month').text(getPersianMonth(window.adminCurrentMonth));
+
+                var guideText = '📅 تاریخ شروع را انتخاب کنید';
+                if (window.adminSelectedFrom && !window.adminSelectedTo) {
+                    guideText = '📅 تاریخ پایان را انتخاب کنید';
+                }
+                $('#admin-cal-guide').html(guideText);
 
                 var html = '';
-                var daysInMonth = getDaysInJalaliMonth(year, month);
-                var firstDay = getFirstDayOfJalaliMonth(year, month);
+                var daysInMonth = getDaysInJalaliMonth(window.adminCurrentYear, window.adminCurrentMonth);
+                var firstDay = getFirstDayOfJalaliMonth(window.adminCurrentYear, window.adminCurrentMonth);
 
                 for (var i = 0; i < firstDay; i++) {
                     html += '<div class="admin-cal-day empty"></div>';
                 }
 
                 for (var day = 1; day <= daysInMonth; day++) {
-                    var dateStr = year + '/' + pad(month) + '/' + pad(day);
-                    html += '<div class="admin-cal-day" data-date="' + dateStr + '">' + day + '</div>';
+                    var dateStr = window.adminCurrentYear + '/' + pad(window.adminCurrentMonth) + '/' + pad(day);
+                    var classes = 'admin-cal-day';
+
+                    if (window.adminSelectedFrom && dateStr === window.adminSelectedFrom) {
+                        classes += ' selected-from';
+                    }
+                    if (window.adminSelectedTo && dateStr === window.adminSelectedTo) {
+                        classes += ' selected-to';
+                    }
+                    if (window.adminSelectedFrom && window.adminSelectedTo && dateStr > window.adminSelectedFrom && dateStr < window.adminSelectedTo) {
+                        classes += ' in-range';
+                    }
+                    if (window.adminSelectedFrom && !window.adminSelectedTo && dateStr > window.adminSelectedFrom) {
+                        classes += ' selectable';
+                    }
+
+                    html += '<div class="' + classes + '" data-date="' + dateStr + '">' + day + '</div>';
                 }
 
                 $('#admin-calendar-days').html(html);
@@ -478,6 +521,26 @@ class WC_Hotel_Reserve {
 
             $('#admin-cal-close').on('click', function() {
                 $('#admin-calendar-modal').fadeOut();
+                window.adminSelectedFrom = null;
+                window.adminSelectedTo = null;
+            });
+
+            $('#admin-cal-prev').on('click', function() {
+                window.adminCurrentMonth--;
+                if (window.adminCurrentMonth < 1) {
+                    window.adminCurrentMonth = 12;
+                    window.adminCurrentYear--;
+                }
+                renderAdminCalendar();
+            });
+
+            $('#admin-cal-next').on('click', function() {
+                window.adminCurrentMonth++;
+                if (window.adminCurrentMonth > 12) {
+                    window.adminCurrentMonth = 1;
+                    window.adminCurrentYear++;
+                }
+                renderAdminCalendar();
             });
 
             // توابع کمکی
@@ -570,13 +633,13 @@ class WC_Hotel_Reserve {
                         <?php if (!empty($room['date_ranges'])): ?>
                             <?php foreach ($room['date_ranges'] as $range): ?>
                                 <div class="date-range-item">
-                                    <input type="text" class="range-from" value="<?php echo esc_attr($range['from']); ?>" placeholder="از تاریخ" readonly>
-                                    <input type="text" class="range-to" value="<?php echo esc_attr($range['to']); ?>" placeholder="تا تاریخ" readonly>
+                                    <input type="text" class="range-dates" value="<?php echo esc_attr($range['from'] . ' تا ' . $range['to']); ?>" placeholder="انتخاب بازه تاریخ" readonly style="cursor:pointer;">
                                     <input type="number" class="range-price" value="<?php echo esc_attr($range['price'] ?? ''); ?>" placeholder="قیمت/شب" step="1000">
-                                    <button type="button" class="btn-select-date" data-target="from">📅 از</button>
-                                    <button type="button" class="btn-select-date" data-target="to">📅 تا</button>
+                                    <button type="button" class="btn-select-date-range">📅 انتخاب تاریخ</button>
                                     <label><input type="checkbox" class="range-disabled" <?php checked($range['disabled'] ?? false, true); ?>> غیرفعال</label>
                                     <button type="button" class="btn-remove-date-range">✕</button>
+                                    <input type="hidden" class="range-from" value="<?php echo esc_attr($range['from']); ?>">
+                                    <input type="hidden" class="range-to" value="<?php echo esc_attr($range['to']); ?>">
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -595,14 +658,17 @@ class WC_Hotel_Reserve {
             <div id="admin-calendar-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:999999;align-items:center;justify-content:center;">
                 <div style="background:white;border-radius:12px;width:450px;max-width:95%;">
                     <div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:18px 20px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
-                        <h3 style="margin:0;font-size:16px;">📅 انتخاب تاریخ</h3>
+                        <h3 style="margin:0;font-size:16px;">📅 انتخاب بازه تاریخ</h3>
                         <button type="button" id="admin-cal-close" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:16px;">✕</button>
                     </div>
                     <div style="padding:20px;">
+                        <div id="admin-cal-guide" style="background:#e3f2fd;padding:10px;border-radius:6px;margin-bottom:15px;text-align:center;font-size:14px;font-weight:600;color:#1976d2;">
+                            📅 تاریخ شروع را انتخاب کنید
+                        </div>
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-                            <button type="button" style="background:#667eea;color:white;border:none;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:bold;">❮</button>
+                            <button type="button" id="admin-cal-prev" style="background:#667eea;color:white;border:none;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:bold;">❮</button>
                             <div style="font-size:16px;font-weight:600;"><span id="admin-cal-month"></span> <span id="admin-cal-year"></span></div>
-                            <button type="button" style="background:#667eea;color:white;border:none;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:bold;">❯</button>
+                            <button type="button" id="admin-cal-next" style="background:#667eea;color:white;border:none;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:bold;">❯</button>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:10px;text-align:center;font-weight:bold;color:#666;font-size:13px;">
                             <div>ش</div><div>ی</div><div>د</div><div>س</div><div>چ</div><div>پ</div><div>ج</div>
@@ -624,9 +690,25 @@ class WC_Hotel_Reserve {
                 transition: all 0.2s;
             }
             .admin-cal-day:hover:not(.empty) {
-                background: #667eea;
+                background: #e3f2fd;
+                transform: scale(1.05);
+            }
+            .admin-cal-day.selected-from {
+                background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
-                transform: scale(1.1);
+                font-weight: bold;
+            }
+            .admin-cal-day.selected-to {
+                background: linear-gradient(135deg, #11998e, #38ef7d);
+                color: white;
+                font-weight: bold;
+            }
+            .admin-cal-day.in-range {
+                background: #fff3cd;
+                border: 1px solid #ffc107;
+            }
+            .admin-cal-day.selectable:hover {
+                background: #c8e6c9;
             }
             .admin-cal-day.empty {
                 background: transparent;
@@ -774,6 +856,7 @@ class WC_Hotel_Reserve {
         $rooms = get_post_meta($product->get_id(), '_hotel_rooms', true);
         if (empty($rooms)) return;
 
+        $ajax_url = admin_url('admin-ajax.php');
         $cart_url = wc_get_cart_url();
         ?>
         <!-- Modal تقویم رزرو -->
@@ -956,7 +1039,7 @@ class WC_Hotel_Reserve {
 
                 selectedExtraGuests = parseInt($('#extra-guests-select').val() || 0);
 
-                $.post(woocommerce_params.ajax_url, {
+                $.post('<?php echo esc_js($ajax_url); ?>', {
                     action: 'hotel_check_room_availability',
                     room_data: JSON.stringify(currentRoom),
                     check_in: selectedCheckIn,
@@ -989,7 +1072,11 @@ class WC_Hotel_Reserve {
 
                         $('#booking-summary').show();
                         $('#reserve-room-btn').show();
+                    } else {
+                        alert('خطا در محاسبه قیمت');
                     }
+                }).fail(function() {
+                    alert('خطا در ارتباط با سرور');
                 });
             }
 
@@ -1081,7 +1168,7 @@ class WC_Hotel_Reserve {
                 var btn = $(this);
                 btn.prop('disabled', true).text('در حال رزرو...');
 
-                $.post(woocommerce_params.ajax_url, {
+                $.post('<?php echo esc_js($ajax_url); ?>', {
                     action: 'hotel_add_room_to_cart',
                     product_id: <?php echo $product->get_id(); ?>,
                     room_data: JSON.stringify(currentRoom),
@@ -1091,12 +1178,15 @@ class WC_Hotel_Reserve {
                     nonce: '<?php echo wp_create_nonce("hotel_add_cart"); ?>'
                 }, function(response) {
                     if (response.success) {
-                        // انتقال به صفحه سبد خرید
                         window.location.href = '<?php echo esc_js($cart_url); ?>';
                     } else {
-                        alert('❌ خطا: ' + (response.data ? response.data.message : 'خطای نامشخص'));
+                        alert('❌ خطا: ' + (response.data && response.data.message ? response.data.message : 'خطای نامشخص'));
                         btn.prop('disabled', false).text('✓ رزرو اتاق');
                     }
+                }).fail(function(jqXHR, textStatus, errorThrown) {
+                    console.error('AJAX Error:', textStatus, errorThrown);
+                    alert('❌ خطا در ارتباط با سرور. لطفاً دوباره تلاش کنید.');
+                    btn.prop('disabled', false).text('✓ رزرو اتاق');
                 });
             });
         });
